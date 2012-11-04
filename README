@@ -8,3 +8,5 @@ lab1: prog1.s
 	  prog2.s
 	  prog3.s
 	  prog4.s
+
+hardware: Has all the implementations on LPC2378 development kit.

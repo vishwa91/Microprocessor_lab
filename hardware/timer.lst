@@ -1,0 +1,617 @@
+   1              		.cpu arm7tdmi-s
+   2              		.eabi_attribute 27, 3
+   3              		.fpu vfpv3-d16
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 2
+  10              		.eabi_attribute 30, 6
+  11              		.eabi_attribute 34, 0
+  12              		.eabi_attribute 18, 4
+  13              		.code	16
+  14              		.file	"timer.c"
+  15              		.text
+  16              	.Ltext0:
+  17              		.cfi_sections	.debug_frame
+  18              		.global	timer_counter
+  19              		.section	.bss.timer_counter,"aw",%nobits
+  20              		.align	2
+  23              	timer_counter:
+  24 0000 00000000 		.space	4
+  25              		.section	.text.install_irq,"ax",%progbits
+  26              		.align	2
+  27              		.global	install_irq
+  28              		.code	16
+  29              		.thumb_func
+  31              	install_irq:
+  32              	.LFB0:
+  33              		.file 1 "timer.c"
+   1:timer.c       **** /*****************************************************************************
+   2:timer.c       ****  *   timer.c:  Timer C file for NXP LPC23xx/24xx Family Microprocessors
+   3:timer.c       ****  *
+   4:timer.c       ****  *   Copyright(C) 2006, NXP Semiconductor
+   5:timer.c       ****  *   All rights reserved.
+   6:timer.c       ****  *
+   7:timer.c       ****  *   History
+   8:timer.c       ****  *   2006.09.01  ver 1.00    Prelimnary version, first Release
+   9:timer.c       ****  *
+  10:timer.c       **** ******************************************************************************/
+  11:timer.c       **** #include "LPC23xx.h"		/* LPC23xx/24xx Peripheral Registers	*/
+  12:timer.c       **** 
+  13:timer.c       **** volatile int timer_counter = 0;
+  14:timer.c       **** #define NULL    ((void *)0)
+  15:timer.c       **** #define FALSE   (0)
+  16:timer.c       **** #define TRUE    (1)
+  17:timer.c       **** /*******************************copied files from irq.h file **************************************
+  18:timer.c       **** #define VECT_ADDR_INDEX	0x100
+  19:timer.c       **** #define VECT_CNTL_INDEX 0x200
+  20:timer.c       **** 
+  21:timer.c       **** /* Be aware that, from compiler to compiler, nested interrupt will have to
+  22:timer.c       **** be handled differently. More details can be found in Philips LPC2000
+  23:timer.c       **** family app-note AN10381 */
+  24:timer.c       ****  
+  25:timer.c       **** 
+  26:timer.c       **** // mthomas
+  27:timer.c       **** #ifdef __GNUC__
+  28:timer.c       **** #define __irq
+  29:timer.c       **** #define IENABLE 
+  30:timer.c       **** #define IDISABLE
+  31:timer.c       **** #else
+  32:timer.c       **** /* unlike Keil CARM Compiler, in ARM's RealView compiler, don't save and 
+  33:timer.c       **** restore registers into the stack in RVD as the compiler does that for you. 
+  34:timer.c       **** See RVD ARM compiler Inline and embedded assemblers, "Rules for 
+  35:timer.c       **** using __asm and asm keywords. */
+  36:timer.c       **** static int sysreg;		/* used as LR register */
+  37:timer.c       **** #define IENABLE __asm { MRS sysreg, SPSR; MSR CPSR_c, #SYS32Mode }
+  38:timer.c       **** #define IDISABLE __asm { MSR CPSR_c, #(IRQ32Mode|I_Bit); MSR SPSR_cxsf, sysreg }
+  39:timer.c       **** #endif
+  40:timer.c       **** 
+  41:timer.c       **** /**************************************************************************************************
+  42:timer.c       **** /******************************************************************************
+  43:timer.c       **** ** Function name:		install_irq
+  44:timer.c       **** **
+  45:timer.c       **** ** Descriptions:		Install interrupt handler
+  46:timer.c       **** ** parameters:			Interrupt number, interrupt handler address, 
+  47:timer.c       **** **						interrupt priority
+  48:timer.c       **** ** Returned value:		true or false, return false if IntNum is out of range
+  49:timer.c       **** ** 
+  50:timer.c       **** ******************************************************************************/
+  51:timer.c       **** int install_irq( int IntNumber, void *HandlerAddr, int Priority )
+  52:timer.c       **** {
+  34              		.loc 1 52 0
+  35              		.cfi_startproc
+  36 0000 80B5     		push	{r7, lr}
+  37              	.LCFI0:
+  38              		.cfi_def_cfa_offset 8
+  39              		.cfi_offset 7, -8
+  40              		.cfi_offset 14, -4
+  41 0002 86B0     		sub	sp, sp, #24
+  42              	.LCFI1:
+  43              		.cfi_def_cfa_offset 32
+  44 0004 00AF     		add	r7, sp, #0
+  45              	.LCFI2:
+  46              		.cfi_def_cfa_register 7
+  47 0006 F860     		str	r0, [r7, #12]
+  48 0008 B960     		str	r1, [r7, #8]
+  49 000a 7A60     		str	r2, [r7, #4]
+  53:timer.c       ****     int *vect_addr;
+  54:timer.c       ****     int *vect_cntl;
+  55:timer.c       ****       
+  56:timer.c       ****     VICIntEnClr = 1 << IntNumber;	/* Disable Interrupt */
+  50              		.loc 1 56 0
+  51 000c 144B     		ldr	r3, .L4
+  52 000e 0121     		mov	r1, #1
+  53 0010 FA68     		ldr	r2, [r7, #12]
+  54 0012 081C     		mov	r0, r1
+  55 0014 9040     		lsl	r0, r0, r2
+  56 0016 021C     		mov	r2, r0
+  57 0018 1A60     		str	r2, [r3]
+  57:timer.c       ****     if ( IntNumber >= 32 )
+  58              		.loc 1 57 0
+  59 001a FB68     		ldr	r3, [r7, #12]
+  60 001c 1F2B     		cmp	r3, #31
+  61 001e 01DD     		ble	.L2
+  58:timer.c       ****     {
+  59:timer.c       **** 		return ( FALSE );
+  62              		.loc 1 59 0
+  63 0020 0023     		mov	r3, #0
+  64 0022 17E0     		b	.L3
+  65              	.L2:
+  60:timer.c       ****     }
+  61:timer.c       ****     else
+  62:timer.c       ****     {
+  63:timer.c       **** 		/* find first un-assigned VIC address for the handler */
+  64:timer.c       **** 		vect_addr = (int *)(VIC_BASE_ADDR + VECT_ADDR_INDEX + IntNumber*4);
+  66              		.loc 1 64 0
+  67 0024 FB68     		ldr	r3, [r7, #12]
+  68 0026 0F4A     		ldr	r2, .L4+4
+  69 0028 9B18     		add	r3, r3, r2
+  70 002a 9B00     		lsl	r3, r3, #2
+  71 002c 3B61     		str	r3, [r7, #16]
+  65:timer.c       **** 		vect_cntl = (int *)(VIC_BASE_ADDR + VECT_CNTL_INDEX + IntNumber*4);
+  72              		.loc 1 65 0
+  73 002e FB68     		ldr	r3, [r7, #12]
+  74 0030 0D48     		ldr	r0, .L4+8
+  75 0032 1B18     		add	r3, r3, r0
+  76 0034 9B00     		lsl	r3, r3, #2
+  77 0036 7B61     		str	r3, [r7, #20]
+  66:timer.c       **** 		*vect_addr = (int)HandlerAddr;	/* set interrupt vector */
+  78              		.loc 1 66 0
+  79 0038 BA68     		ldr	r2, [r7, #8]
+  80 003a 3B69     		ldr	r3, [r7, #16]
+  81 003c 1A60     		str	r2, [r3]
+  67:timer.c       **** 		*vect_cntl = Priority;
+  82              		.loc 1 67 0
+  83 003e 7B69     		ldr	r3, [r7, #20]
+  84 0040 7A68     		ldr	r2, [r7, #4]
+  85 0042 1A60     		str	r2, [r3]
+  68:timer.c       **** 		VICIntEnable = 1 << IntNumber;	/* Enable Interrupt */
+  86              		.loc 1 68 0
+  87 0044 094B     		ldr	r3, .L4+12
+  88 0046 0121     		mov	r1, #1
+  89 0048 FA68     		ldr	r2, [r7, #12]
+  90 004a 081C     		mov	r0, r1
+  91 004c 9040     		lsl	r0, r0, r2
+  92 004e 021C     		mov	r2, r0
+  93 0050 1A60     		str	r2, [r3]
+  69:timer.c       **** 		return( TRUE );
+  94              		.loc 1 69 0
+  95 0052 0123     		mov	r3, #1
+  96              	.L3:
+  70:timer.c       ****     }
+  71:timer.c       **** }
+  97              		.loc 1 71 0
+  98 0054 181C     		mov	r0, r3
+  99 0056 BD46     		mov	sp, r7
+ 100 0058 06B0     		add	sp, sp, #24
+ 101              		@ sp needed for prologue
+ 102 005a 80BC     		pop	{r7}
+ 103 005c 02BC     		pop	{r1}
+ 104 005e 0847     		bx	r1
+ 105              	.L5:
+ 106              		.align	2
+ 107              	.L4:
+ 108 0060 14F0FFFF 		.word	-4076
+ 109 0064 40FCFF3F 		.word	1073740864
+ 110 0068 80FCFF3F 		.word	1073740928
+ 111 006c 10F0FFFF 		.word	-4080
+ 112              		.cfi_endproc
+ 113              	.LFE0:
+ 115              		.section	.text.Timer0Handler,"ax",%progbits
+ 116              		.align	2
+ 117              		.global	Timer0Handler
+ 118              		.code	16
+ 119              		.thumb_func
+ 121              	Timer0Handler:
+ 122              	.LFB1:
+  72:timer.c       **** 
+  73:timer.c       **** /******************************************************************************
+  74:timer.c       **** ** Function name:		Timer0Handler
+  75:timer.c       **** **
+  76:timer.c       **** ** Descriptions:		Timer/Counter 0 interrupt handler
+  77:timer.c       **** **				executes each 10ms @ 60 MHz CPU Clock
+  78:timer.c       **** **
+  79:timer.c       **** ** parameters:			None
+  80:timer.c       **** ** Returned value:		None
+  81:timer.c       **** ** 
+  82:timer.c       **** ******************************************************************************/
+  83:timer.c       **** #ifdef __GNUC__
+  84:timer.c       **** void Timer0Handler (void); // avoid missing proto warning - mthomas
+  85:timer.c       **** #endif
+  86:timer.c       **** void Timer0Handler (void) __irq 
+  87:timer.c       **** {  
+ 123              		.loc 1 87 0
+ 124              		.cfi_startproc
+ 125 0000 80B5     		push	{r7, lr}
+ 126              	.LCFI3:
+ 127              		.cfi_def_cfa_offset 8
+ 128              		.cfi_offset 7, -8
+ 129              		.cfi_offset 14, -4
+ 130 0002 00AF     		add	r7, sp, #0
+ 131              	.LCFI4:
+ 132              		.cfi_def_cfa_register 7
+  88:timer.c       ****     T0IR = 1;			/* clear interrupt flag */
+ 133              		.loc 1 88 0
+ 134 0004 074B     		ldr	r3, .L7
+ 135 0006 0122     		mov	r2, #1
+ 136 0008 1A60     		str	r2, [r3]
+  89:timer.c       ****     IENABLE;			/* handles nested interrupt */
+  90:timer.c       **** 
+  91:timer.c       ****     timer_counter++;
+ 137              		.loc 1 91 0
+ 138 000a 074B     		ldr	r3, .L7+4
+ 139 000c 1B68     		ldr	r3, [r3]
+ 140 000e 5A1C     		add	r2, r3, #1
+ 141 0010 054B     		ldr	r3, .L7+4
+ 142 0012 1A60     		str	r2, [r3]
+  92:timer.c       **** 
+  93:timer.c       ****     IDISABLE;
+  94:timer.c       ****     VICVectAddr = 0;		/* Acknowledge Interrupt */
+ 143              		.loc 1 94 0
+ 144 0014 054B     		ldr	r3, .L7+8
+ 145 0016 0022     		mov	r2, #0
+ 146 0018 1A60     		str	r2, [r3]
+  95:timer.c       **** }
+ 147              		.loc 1 95 0
+ 148 001a BD46     		mov	sp, r7
+ 149              		@ sp needed for prologue
+ 150 001c 80BC     		pop	{r7}
+ 151 001e 01BC     		pop	{r0}
+ 152 0020 0047     		bx	r0
+ 153              	.L8:
+ 154 0022 C046     		.align	2
+ 155              	.L7:
+ 156 0024 004000E0 		.word	-536854528
+ 157 0028 00000000 		.word	timer_counter
+ 158 002c 00FFFFFF 		.word	-256
+ 159              		.cfi_endproc
+ 160              	.LFE1:
+ 162              		.section	.text.enable_timer,"ax",%progbits
+ 163              		.align	2
+ 164              		.global	enable_timer
+ 165              		.code	16
+ 166              		.thumb_func
+ 168              	enable_timer:
+ 169              	.LFB2:
+  96:timer.c       **** 
+  97:timer.c       **** /******************************************************************************
+  98:timer.c       **** ** Function name:		enable_timer
+  99:timer.c       **** **
+ 100:timer.c       **** ** Descriptions:		Enable timer
+ 101:timer.c       **** **
+ 102:timer.c       **** ** parameters:			timer number: 0 or 1
+ 103:timer.c       **** ** Returned value:		None
+ 104:timer.c       **** ** 
+ 105:timer.c       **** ******************************************************************************/
+ 106:timer.c       **** void enable_timer( char timer_num )
+ 107:timer.c       **** {
+ 170              		.loc 1 107 0
+ 171              		.cfi_startproc
+ 172 0000 80B5     		push	{r7, lr}
+ 173              	.LCFI5:
+ 174              		.cfi_def_cfa_offset 8
+ 175              		.cfi_offset 7, -8
+ 176              		.cfi_offset 14, -4
+ 177 0002 82B0     		sub	sp, sp, #8
+ 178              	.LCFI6:
+ 179              		.cfi_def_cfa_offset 16
+ 180 0004 00AF     		add	r7, sp, #0
+ 181              	.LCFI7:
+ 182              		.cfi_def_cfa_register 7
+ 183 0006 021C     		mov	r2, r0
+ 184 0008 FB1D     		add	r3, r7, #7
+ 185 000a 1A70     		strb	r2, [r3]
+ 108:timer.c       ****     if ( timer_num == 0 )
+ 186              		.loc 1 108 0
+ 187 000c FB1D     		add	r3, r7, #7
+ 188 000e 1B78     		ldrb	r3, [r3]
+ 189 0010 002B     		cmp	r3, #0
+ 190 0012 03D1     		bne	.L10
+ 109:timer.c       ****     {
+ 110:timer.c       **** 		T0TCR = 1;
+ 191              		.loc 1 110 0
+ 192 0014 054B     		ldr	r3, .L12
+ 193 0016 0122     		mov	r2, #1
+ 194 0018 1A60     		str	r2, [r3]
+ 195 001a 02E0     		b	.L9
+ 196              	.L10:
+ 111:timer.c       ****     }
+ 112:timer.c       ****     else
+ 113:timer.c       ****     {
+ 114:timer.c       **** 		T1TCR = 1;
+ 197              		.loc 1 114 0
+ 198 001c 044B     		ldr	r3, .L12+4
+ 199 001e 0122     		mov	r2, #1
+ 200 0020 1A60     		str	r2, [r3]
+ 201              	.L9:
+ 115:timer.c       ****     }
+ 116:timer.c       ****     return;
+ 117:timer.c       **** }
+ 202              		.loc 1 117 0
+ 203 0022 BD46     		mov	sp, r7
+ 204 0024 02B0     		add	sp, sp, #8
+ 205              		@ sp needed for prologue
+ 206 0026 80BC     		pop	{r7}
+ 207 0028 01BC     		pop	{r0}
+ 208 002a 0047     		bx	r0
+ 209              	.L13:
+ 210              		.align	2
+ 211              	.L12:
+ 212 002c 044000E0 		.word	-536854524
+ 213 0030 048000E0 		.word	-536838140
+ 214              		.cfi_endproc
+ 215              	.LFE2:
+ 217              		.section	.text.disable_timer,"ax",%progbits
+ 218              		.align	2
+ 219              		.global	disable_timer
+ 220              		.code	16
+ 221              		.thumb_func
+ 223              	disable_timer:
+ 224              	.LFB3:
+ 118:timer.c       **** 
+ 119:timer.c       **** /******************************************************************************
+ 120:timer.c       **** ** Function name:		disable_timer
+ 121:timer.c       **** **
+ 122:timer.c       **** ** Descriptions:		Disable timer
+ 123:timer.c       **** **
+ 124:timer.c       **** ** parameters:			timer number: 0 or 1
+ 125:timer.c       **** ** Returned value:		None
+ 126:timer.c       **** ** 
+ 127:timer.c       **** ******************************************************************************/
+ 128:timer.c       **** void disable_timer( char timer_num )
+ 129:timer.c       **** {
+ 225              		.loc 1 129 0
+ 226              		.cfi_startproc
+ 227 0000 80B5     		push	{r7, lr}
+ 228              	.LCFI8:
+ 229              		.cfi_def_cfa_offset 8
+ 230              		.cfi_offset 7, -8
+ 231              		.cfi_offset 14, -4
+ 232 0002 82B0     		sub	sp, sp, #8
+ 233              	.LCFI9:
+ 234              		.cfi_def_cfa_offset 16
+ 235 0004 00AF     		add	r7, sp, #0
+ 236              	.LCFI10:
+ 237              		.cfi_def_cfa_register 7
+ 238 0006 021C     		mov	r2, r0
+ 239 0008 FB1D     		add	r3, r7, #7
+ 240 000a 1A70     		strb	r2, [r3]
+ 130:timer.c       ****     if ( timer_num == 0 )
+ 241              		.loc 1 130 0
+ 242 000c FB1D     		add	r3, r7, #7
+ 243 000e 1B78     		ldrb	r3, [r3]
+ 244 0010 002B     		cmp	r3, #0
+ 245 0012 03D1     		bne	.L15
+ 131:timer.c       ****     {
+ 132:timer.c       **** 		T0TCR = 0;
+ 246              		.loc 1 132 0
+ 247 0014 054B     		ldr	r3, .L17
+ 248 0016 0022     		mov	r2, #0
+ 249 0018 1A60     		str	r2, [r3]
+ 250 001a 02E0     		b	.L14
+ 251              	.L15:
+ 133:timer.c       ****     }
+ 134:timer.c       ****     else
+ 135:timer.c       ****     {
+ 136:timer.c       **** 		T1TCR = 0;
+ 252              		.loc 1 136 0
+ 253 001c 044B     		ldr	r3, .L17+4
+ 254 001e 0022     		mov	r2, #0
+ 255 0020 1A60     		str	r2, [r3]
+ 256              	.L14:
+ 137:timer.c       ****     }
+ 138:timer.c       ****     return;
+ 139:timer.c       **** }
+ 257              		.loc 1 139 0
+ 258 0022 BD46     		mov	sp, r7
+ 259 0024 02B0     		add	sp, sp, #8
+ 260              		@ sp needed for prologue
+ 261 0026 80BC     		pop	{r7}
+ 262 0028 01BC     		pop	{r0}
+ 263 002a 0047     		bx	r0
+ 264              	.L18:
+ 265              		.align	2
+ 266              	.L17:
+ 267 002c 044000E0 		.word	-536854524
+ 268 0030 048000E0 		.word	-536838140
+ 269              		.cfi_endproc
+ 270              	.LFE3:
+ 272              		.section	.text.reset_timer,"ax",%progbits
+ 273              		.align	2
+ 274              		.global	reset_timer
+ 275              		.code	16
+ 276              		.thumb_func
+ 278              	reset_timer:
+ 279              	.LFB4:
+ 140:timer.c       **** 
+ 141:timer.c       **** /******************************************************************************
+ 142:timer.c       **** ** Function name:		reset_timer
+ 143:timer.c       **** **
+ 144:timer.c       **** ** Descriptions:		Reset timer
+ 145:timer.c       **** **
+ 146:timer.c       **** ** parameters:			timer number: 0 or 1
+ 147:timer.c       **** ** Returned value:		None
+ 148:timer.c       **** ** 
+ 149:timer.c       **** ******************************************************************************/
+ 150:timer.c       **** void reset_timer( char timer_num )
+ 151:timer.c       **** {
+ 280              		.loc 1 151 0
+ 281              		.cfi_startproc
+ 282 0000 80B5     		push	{r7, lr}
+ 283              	.LCFI11:
+ 284              		.cfi_def_cfa_offset 8
+ 285              		.cfi_offset 7, -8
+ 286              		.cfi_offset 14, -4
+ 287 0002 84B0     		sub	sp, sp, #16
+ 288              	.LCFI12:
+ 289              		.cfi_def_cfa_offset 24
+ 290 0004 00AF     		add	r7, sp, #0
+ 291              	.LCFI13:
+ 292              		.cfi_def_cfa_register 7
+ 293 0006 021C     		mov	r2, r0
+ 294 0008 FB1D     		add	r3, r7, #7
+ 295 000a 1A70     		strb	r2, [r3]
+ 152:timer.c       ****     int regVal;
+ 153:timer.c       **** 
+ 154:timer.c       ****     if ( timer_num == 0 )
+ 296              		.loc 1 154 0
+ 297 000c FB1D     		add	r3, r7, #7
+ 298 000e 1B78     		ldrb	r3, [r3]
+ 299 0010 002B     		cmp	r3, #0
+ 300 0012 0AD1     		bne	.L20
+ 155:timer.c       ****     {
+ 156:timer.c       **** 		regVal = T0TCR;
+ 301              		.loc 1 156 0
+ 302 0014 0C4B     		ldr	r3, .L22
+ 303 0016 1B68     		ldr	r3, [r3]
+ 304 0018 FB60     		str	r3, [r7, #12]
+ 157:timer.c       **** 		regVal |= 0x02;
+ 305              		.loc 1 157 0
+ 306 001a FB68     		ldr	r3, [r7, #12]
+ 307 001c 0222     		mov	r2, #2
+ 308 001e 1343     		orr	r3, r2
+ 309 0020 FB60     		str	r3, [r7, #12]
+ 158:timer.c       **** 		T0TCR = regVal;
+ 310              		.loc 1 158 0
+ 311 0022 094B     		ldr	r3, .L22
+ 312 0024 FA68     		ldr	r2, [r7, #12]
+ 313 0026 1A60     		str	r2, [r3]
+ 314 0028 09E0     		b	.L19
+ 315              	.L20:
+ 159:timer.c       ****     }
+ 160:timer.c       ****     else
+ 161:timer.c       ****     {
+ 162:timer.c       **** 		regVal = T1TCR;
+ 316              		.loc 1 162 0
+ 317 002a 084B     		ldr	r3, .L22+4
+ 318 002c 1B68     		ldr	r3, [r3]
+ 319 002e FB60     		str	r3, [r7, #12]
+ 163:timer.c       **** 		regVal |= 0x02;
+ 320              		.loc 1 163 0
+ 321 0030 FB68     		ldr	r3, [r7, #12]
+ 322 0032 0222     		mov	r2, #2
+ 323 0034 1343     		orr	r3, r2
+ 324 0036 FB60     		str	r3, [r7, #12]
+ 164:timer.c       **** 		T1TCR = regVal;
+ 325              		.loc 1 164 0
+ 326 0038 044B     		ldr	r3, .L22+4
+ 327 003a FA68     		ldr	r2, [r7, #12]
+ 328 003c 1A60     		str	r2, [r3]
+ 329              	.L19:
+ 165:timer.c       ****     }
+ 166:timer.c       ****     return;
+ 167:timer.c       **** } 
+ 330              		.loc 1 167 0
+ 331 003e BD46     		mov	sp, r7
+ 332 0040 04B0     		add	sp, sp, #16
+ 333              		@ sp needed for prologue
+ 334 0042 80BC     		pop	{r7}
+ 335 0044 01BC     		pop	{r0}
+ 336 0046 0047     		bx	r0
+ 337              	.L23:
+ 338              		.align	2
+ 339              	.L22:
+ 340 0048 044000E0 		.word	-536854524
+ 341 004c 048000E0 		.word	-536838140
+ 342              		.cfi_endproc
+ 343              	.LFE4:
+ 345              		.section	.text.init_timer,"ax",%progbits
+ 346              		.align	2
+ 347              		.global	init_timer
+ 348              		.code	16
+ 349              		.thumb_func
+ 351              	init_timer:
+ 352              	.LFB5:
+ 168:timer.c       **** 
+ 169:timer.c       **** /******************************************************************************
+ 170:timer.c       **** ** Function name:		init_timer
+ 171:timer.c       **** **
+ 172:timer.c       **** ** Descriptions:		Initialize timer, set timer interval, reset timer,
+ 173:timer.c       **** **						install timer interrupt handler
+ 174:timer.c       **** **
+ 175:timer.c       **** ** parameters:			None
+ 176:timer.c       **** ** Returned value:		true or false, if the interrupt handler can't be
+ 177:timer.c       **** **						installed, return false.
+ 178:timer.c       **** ** 
+ 179:timer.c       **** ******************************************************************************/
+ 180:timer.c       **** int init_timer ( int TimerInterval ) 
+ 181:timer.c       **** {
+ 353              		.loc 1 181 0
+ 354              		.cfi_startproc
+ 355 0000 80B5     		push	{r7, lr}
+ 356              	.LCFI14:
+ 357              		.cfi_def_cfa_offset 8
+ 358              		.cfi_offset 7, -8
+ 359              		.cfi_offset 14, -4
+ 360 0002 82B0     		sub	sp, sp, #8
+ 361              	.LCFI15:
+ 362              		.cfi_def_cfa_offset 16
+ 363 0004 00AF     		add	r7, sp, #0
+ 364              	.LCFI16:
+ 365              		.cfi_def_cfa_register 7
+ 366 0006 7860     		str	r0, [r7, #4]
+ 182:timer.c       ****     timer_counter = 0;
+ 367              		.loc 1 182 0
+ 368 0008 0C4B     		ldr	r3, .L27
+ 369 000a 0022     		mov	r2, #0
+ 370 000c 1A60     		str	r2, [r3]
+ 183:timer.c       ****     T0MR0 = TimerInterval;
+ 371              		.loc 1 183 0
+ 372 000e 0C4B     		ldr	r3, .L27+4
+ 373 0010 7A68     		ldr	r2, [r7, #4]
+ 374 0012 1A60     		str	r2, [r3]
+ 184:timer.c       ****     T0MCR = 3;				/* Interrupt and Reset on MR0*/ 
+ 375              		.loc 1 184 0
+ 376 0014 0B4B     		ldr	r3, .L27+8
+ 377 0016 0322     		mov	r2, #3
+ 378 0018 1A60     		str	r2, [r3]
+ 185:timer.c       ****     if ( install_irq( 4, (void *)Timer0Handler, 0x01 ) == FALSE )
+ 379              		.loc 1 185 0
+ 380 001a 0B4B     		ldr	r3, .L27+12
+ 381 001c 0420     		mov	r0, #4
+ 382 001e 191C     		mov	r1, r3
+ 383 0020 0122     		mov	r2, #1
+ 384 0022 FFF7FEFF 		bl	install_irq
+ 385 0026 031C     		mov	r3, r0
+ 386 0028 01D1     		bne	.L25
+ 186:timer.c       ****     {
+ 187:timer.c       **** 		return (FALSE);
+ 387              		.loc 1 187 0
+ 388 002a 0023     		mov	r3, #0
+ 389 002c 00E0     		b	.L26
+ 390              	.L25:
+ 188:timer.c       ****     }
+ 189:timer.c       ****    else
+ 190:timer.c       ****     {
+ 191:timer.c       **** 		return (TRUE);
+ 391              		.loc 1 191 0
+ 392 002e 0123     		mov	r3, #1
+ 393              	.L26:
+ 192:timer.c       ****     }
+ 193:timer.c       **** }
+ 394              		.loc 1 193 0
+ 395 0030 181C     		mov	r0, r3
+ 396 0032 BD46     		mov	sp, r7
+ 397 0034 02B0     		add	sp, sp, #8
+ 398              		@ sp needed for prologue
+ 399 0036 80BC     		pop	{r7}
+ 400 0038 02BC     		pop	{r1}
+ 401 003a 0847     		bx	r1
+ 402              	.L28:
+ 403              		.align	2
+ 404              	.L27:
+ 405 003c 00000000 		.word	timer_counter
+ 406 0040 184000E0 		.word	-536854504
+ 407 0044 144000E0 		.word	-536854508
+ 408 0048 00000000 		.word	Timer0Handler
+ 409              		.cfi_endproc
+ 410              	.LFE5:
+ 412              		.text
+ 413              	.Letext0:
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 timer.c
+     /tmp/cc3TC802.s:23     .bss.timer_counter:0000000000000000 timer_counter
+     /tmp/cc3TC802.s:20     .bss.timer_counter:0000000000000000 $d
+     /tmp/cc3TC802.s:26     .text.install_irq:0000000000000000 $t
+     /tmp/cc3TC802.s:31     .text.install_irq:0000000000000000 install_irq
+     /tmp/cc3TC802.s:108    .text.install_irq:0000000000000060 $d
+     /tmp/cc3TC802.s:116    .text.Timer0Handler:0000000000000000 $t
+     /tmp/cc3TC802.s:121    .text.Timer0Handler:0000000000000000 Timer0Handler
+     /tmp/cc3TC802.s:156    .text.Timer0Handler:0000000000000024 $d
+     /tmp/cc3TC802.s:163    .text.enable_timer:0000000000000000 $t
+     /tmp/cc3TC802.s:168    .text.enable_timer:0000000000000000 enable_timer
+     /tmp/cc3TC802.s:212    .text.enable_timer:000000000000002c $d
+     /tmp/cc3TC802.s:218    .text.disable_timer:0000000000000000 $t
+     /tmp/cc3TC802.s:223    .text.disable_timer:0000000000000000 disable_timer
+     /tmp/cc3TC802.s:267    .text.disable_timer:000000000000002c $d
+     /tmp/cc3TC802.s:273    .text.reset_timer:0000000000000000 $t
+     /tmp/cc3TC802.s:278    .text.reset_timer:0000000000000000 reset_timer
+     /tmp/cc3TC802.s:340    .text.reset_timer:0000000000000048 $d
+     /tmp/cc3TC802.s:346    .text.init_timer:0000000000000000 $t
+     /tmp/cc3TC802.s:351    .text.init_timer:0000000000000000 init_timer
+     /tmp/cc3TC802.s:405    .text.init_timer:000000000000003c $d
+                     .debug_frame:0000000000000010 $d
+
+NO UNDEFINED SYMBOLS
